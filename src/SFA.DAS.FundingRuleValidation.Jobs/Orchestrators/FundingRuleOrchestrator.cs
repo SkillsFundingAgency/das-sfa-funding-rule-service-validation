@@ -14,10 +14,10 @@ public partial class FundingRuleOrchestrator
     {
         ILogger logger = context.CreateReplaySafeLogger(nameof(ApplyFundingRules));
         var command = context.GetInput<ValidateLearnerCommand>()!;
-        using var scope = logger.BeginScope(new Dictionary<string, string>
+        using var scope = logger.BeginScope(new List<KeyValuePair<string, object?>>
         {
-            { "CorrelationId", command.CorrelationId },
-            { "WaitingInstanceId", command.WaitingInstanceId },
+            new ("CorrelationId", command.CorrelationId),
+            new ("WaitingInstanceId", command.WaitingInstanceId),
         });
 
         var startTime = context.CurrentUtcDateTime;
@@ -75,9 +75,9 @@ public partial class FundingRuleOrchestrator
     private static void LogValidationComplete(ILogger logger, DateTime startTime, DateTime endTime)
     {
         var duration = endTime - startTime;
-        using var _ = logger.BeginScope(new Dictionary<string, string>
+        using var _ = logger.BeginScope(new List<KeyValuePair<string, object?>>
         {
-            { "Duration", $"{duration:G}" },
+            new ("Duration", $"{duration:G}"),
         });
         logger.LogInformation("Learner validation complete");
     }
