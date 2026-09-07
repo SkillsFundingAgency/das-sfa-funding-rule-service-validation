@@ -11,10 +11,10 @@ public partial class CourseAgeCheckActivity(ILogger<CourseAgeCheckActivity> logg
     [Function(nameof(CourseAgeCheckActivity))]
     public List<RuleCourseOutcome> Run([ActivityTrigger] RuleData ruleData, FunctionContext executionContext)
     {
-        using var scope = logger.BeginScope(new Dictionary<string, string>
+        using var scope = logger.BeginScope(new List<KeyValuePair<string, object?>>
         {
-            { "CorrelationId", ruleData.Command.CorrelationId },
-            { "WaitingInstanceId", ruleData.Command.WaitingInstanceId },
+            new ("CorrelationId", ruleData.Command.CorrelationId),
+            new ("WaitingInstanceId", ruleData.Command.WaitingInstanceId),
         });
         
         var parameters = JsonSerializer.Deserialize<CourseAgeCheckParameters>(ruleData.Rule.Parameters)!;

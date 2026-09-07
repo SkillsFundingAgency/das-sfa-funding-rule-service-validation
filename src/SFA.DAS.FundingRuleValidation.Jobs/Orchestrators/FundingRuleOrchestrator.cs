@@ -7,19 +7,20 @@ using SFA.DAS.FundingRuleValidation.Jobs.Domain;
 
 namespace SFA.DAS.FundingRuleValidation.Jobs.Orchestrators;
 
-public static partial class FundingRuleOrchestrator
+public partial class FundingRuleOrchestrator
 {
     [Function(nameof(ApplyFundingRules))]
     public static async Task ApplyFundingRules([OrchestrationTrigger] TaskOrchestrationContext context)
     {
         ILogger logger = context.CreateReplaySafeLogger(nameof(ApplyFundingRules));
         var command = context.GetInput<ValidateLearnerCommand>()!;
-        using var scope = logger.BeginScope(new Dictionary<string, string>
+        using var scope = logger.BeginScope(new List<KeyValuePair<string, object?>>
         {
-            { "CorrelationId", command.CorrelationId },
-            { "WaitingInstanceId", command.WaitingInstanceId },
+            new ("CorrelationId", command.CorrelationId),
+            new ("WaitingInstanceId", command.WaitingInstanceId),
         });
 
+        var startTime = context.CurrentUtcDateTime;
         var status = ValidationStatus.SystemError;
         List<RuleCourseOutcome> outputs = [];
         try
@@ -47,7 +48,7 @@ public static partial class FundingRuleOrchestrator
                 // send only the applicable data
                 var ruleCommand = command with { Courses = courses };
 
-                logger.LogRuleInvocation(rule.RuleName, courses.Select(x => x.Id));
+                LogRuleInvocation(logger, rule.RuleName, courses.Select(x => x.Id));
                 var outcomes = await context.CallActivityAsync<List<RuleCourseOutcome>>(rule.RuleName, new RuleData(rule, ruleCommand), GlobalConstants.TaskOptions);
                 if (outcomes is { Count: > 0 })
                 {
@@ -61,15 +62,26 @@ public static partial class FundingRuleOrchestrator
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Orchestrator failed");
+            logger.LogError(ex, "Learner validation failed");
             outputs = [];
         }
         
         Finished:
         var result = new ValidateLearnerResult(command.CorrelationId, command.WaitingInstanceId, command.Ukprn, command.Uln, status, outputs);
         await context.CallActivityAsync(nameof(SendValidationResultActivity), result, GlobalConstants.TaskOptions);
+        LogValidationComplete(logger, startTime, context.CurrentUtcDateTime);
+    }
+
+    private static void LogValidationComplete(ILogger logger, DateTime startTime, DateTime endTime)
+    {
+        var duration = endTime - startTime;
+        using var _ = logger.BeginScope(new List<KeyValuePair<string, object?>>
+        {
+            new ("Duration", $"{duration:G}"),
+        });
+        logger.LogInformation("Learner validation complete");
     }
 
     [LoggerMessage(LogLevel.Information, "Calling {RuleName} with courses: {Courses}")]
-    static partial void LogRuleInvocation(this ILogger logger, string ruleName, IEnumerable<string> courses);
+    static partial void LogRuleInvocation(ILogger logger, string ruleName, IEnumerable<string> courses);
 }
